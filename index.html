@@ -1,0 +1,2032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RADAR LAB — Interactive Radar &amp; Sonar Simulation</title>
+    <style>
+        /* ==========================================================================
+           TACTICAL MILITARY COMMAND CENTER THEME VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-void: #030705;
+            --bg-panel: #07110c;
+            --bg-panel-elevated: #0c1c14;
+            --border-dim: #133824;
+            --border-bright: #00ff66;
+            --phosphor-primary: #00ff66;
+            --phosphor-secondary: #00cc52;
+            --phosphor-dim: #1d6e3f;
+            --phosphor-glow: rgba(0, 255, 102, 0.35);
+            --sonar-cyan: #00f0ff;
+            --alert-amber: #ffaa00;
+            --alert-red: #ff3b3b;
+            --text-main: #d8ffe6;
+            --text-muted: #68a882;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+            --radius-sm: 4px;
+            --radius-md: 8px;
+        }
+
+        /* ==========================================================================
+           BASE RESET & FLUID RESPONSIVE LAYOUT
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            min-height: 100vh;
+            background-color: var(--bg-void);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            overflow-x: clip;
+            line-height: 1.4;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background:
+                linear-gradient(rgba(0, 255, 102, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 102, 0.03) 1px, transparent 1px);
+            background-size: 28px 28px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app-shell {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 1440px;
+            min-width: 0;
+            margin: 0 auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-x: clip;
+        }
+
+        /* ==========================================================================
+           HEADER & RADAR MODE SELECTOR
+           ========================================================================== */
+        .top-header {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-width: 0;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), inset 0 0 12px rgba(0, 255, 102, 0.05);
+        }
+
+        .brand-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-mono);
+            font-weight: 800;
+            font-size: 1.25rem;
+            letter-spacing: 2px;
+            color: var(--phosphor-primary);
+            text-shadow: 0 0 10px var(--phosphor-glow);
+        }
+
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--phosphor-primary);
+            box-shadow: 0 0 8px var(--phosphor-primary);
+            animation: blink 1.6s infinite ease-in-out;
+        }
+
+        .pulse-dot.paused {
+            background: var(--alert-amber);
+            box-shadow: 0 0 8px var(--alert-amber);
+            animation: none;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(0.85); }
+        }
+
+        .sim-badge {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 255, 102, 0.1);
+            border: 1px solid var(--phosphor-dim);
+            color: var(--phosphor-primary);
+            letter-spacing: 0.5px;
+        }
+
+        .sys-clock {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .sys-clock span strong {
+            color: var(--phosphor-primary);
+        }
+
+        /* 4 Radar Mode Buttons */
+        .mode-bar {
+            position: relative;
+            z-index: 5;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            min-width: 0;
+        }
+
+        @media (min-width: 768px) {
+            .mode-bar {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        .mode-btn {
+            min-height: 52px;
+            min-width: 0;
+            padding: 8px 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-md);
+            color: var(--text-muted);
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            text-align: center;
+            transition: all 0.16s ease;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .mode-btn span {
+            pointer-events: none;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        .mode-btn .mode-en {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .mode-btn .mode-th {
+            font-size: 0.75rem;
+            opacity: 0.88;
+        }
+
+        .mode-btn:hover {
+            border-color: var(--phosphor-secondary);
+            color: var(--text-main);
+        }
+
+        .mode-btn.active {
+            background: rgba(0, 255, 102, 0.16);
+            border-color: var(--phosphor-primary);
+            color: var(--phosphor-primary);
+            box-shadow: 0 0 14px rgba(0, 255, 102, 0.2), inset 0 0 8px rgba(0, 255, 102, 0.15);
+        }
+
+        /* ==========================================================================
+           MAIN WORKSPACE GRID
+           ========================================================================== */
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 10px;
+            min-width: 0;
+        }
+
+        @media (min-width: 1024px) {
+            .workspace-grid {
+                grid-template-columns: minmax(420px, 1.35fr) minmax(300px, 1fr);
+                align-items: start;
+            }
+        }
+
+        .panel-box {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            min-width: 0;
+            max-width: 100%;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.65);
+        }
+
+        .panel-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 6px 10px;
+            border-bottom: 1px solid var(--border-dim);
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--phosphor-primary);
+            letter-spacing: 0.8px;
+            min-width: 0;
+        }
+
+        .panel-header > span:first-child {
+            min-width: 0;
+            flex: 1 1 180px;
+            overflow-wrap: anywhere;
+        }
+
+        .panel-header .sub-tag {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        /* ==========================================================================
+           RADAR DISPLAY & HUD FEEDBACK
+           ========================================================================== */
+        .radar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .hud-flash-bar {
+            background: rgba(0, 255, 102, 0.1);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-sm);
+            padding: 7px 10px;
+            font-family: var(--font-mono);
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: var(--phosphor-primary);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px 10px;
+            min-width: 0;
+            transition: background 0.18s ease, border-color 0.18s ease;
+        }
+
+        .hud-flash-bar > span:first-child {
+            min-width: 0;
+            flex: 1 1 200px;
+            overflow-wrap: anywhere;
+        }
+
+        .hud-flash-bar > span:last-child {
+            flex-shrink: 0;
+        }
+
+        .hud-flash-bar.flash-active {
+            background: rgba(0, 255, 102, 0.25);
+            border-color: var(--phosphor-primary);
+        }
+
+        .radar-stage {
+            width: 100%;
+            min-width: 0;
+            padding: 6px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .radar-wrapper {
+            position: relative;
+            width: min(100%, 540px);
+            aspect-ratio: 1 / 1;
+            flex-shrink: 0;
+            margin: 0 auto;
+            background: radial-gradient(circle at center, #06180f 0%, #020805 75%, #010402 100%);
+            border-radius: 50%;
+            border: 2px solid var(--phosphor-secondary);
+            box-shadow:
+                0 0 28px rgba(0, 255, 102, 0.14),
+                inset 0 0 36px rgba(0, 0, 0, 0.95);
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #radarCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .radar-hud-overlay {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            padding: 6px 8px;
+            background: rgba(0, 0, 0, 0.45);
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(19, 56, 36, 0.7);
+            min-width: 0;
+        }
+
+        @media (min-width: 540px) {
+            .radar-hud-overlay {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        .radar-hud-overlay > span {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .radar-hud-overlay strong {
+            color: var(--phosphor-primary);
+        }
+
+        /* ==========================================================================
+           CONTROL BUTTONS (TOUCH TARGETS >= 52PX)
+           ========================================================================== */
+        .controls-grid {
+            position: relative;
+            z-index: 5;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            min-width: 0;
+        }
+
+        @media (min-width: 540px) {
+            .controls-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        .ctrl-btn {
+            min-height: 52px;
+            min-width: 0;
+            padding: 8px 8px;
+            background: var(--bg-panel-elevated);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-md);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            text-align: center;
+            transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .ctrl-btn span {
+            pointer-events: none;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        .ctrl-btn span.th-label {
+            font-family: var(--font-sans);
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .ctrl-btn:active {
+            transform: scale(0.97);
+        }
+
+        .ctrl-btn:hover {
+            border-color: var(--phosphor-primary);
+        }
+
+        .ctrl-btn.btn-active {
+            background: rgba(0, 255, 102, 0.18);
+            border-color: var(--phosphor-primary);
+            color: var(--phosphor-primary);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.22);
+        }
+
+        .ctrl-btn.btn-active span.th-label {
+            color: var(--text-main);
+        }
+
+        .ctrl-btn.btn-warn.btn-active {
+            background: rgba(255, 170, 0, 0.18);
+            border-color: var(--alert-amber);
+            color: var(--alert-amber);
+            box-shadow: 0 0 10px rgba(255, 170, 0, 0.22);
+        }
+
+        /* ==========================================================================
+           TELEMETRY & CONTACT LIST
+           ========================================================================== */
+        .side-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .telem-card {
+            background: rgba(3, 9, 6, 0.85);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .telem-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            overflow-wrap: anywhere;
+        }
+
+        .telem-value {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--phosphor-primary);
+            overflow-wrap: anywhere;
+        }
+
+        .telem-value.status-highlight {
+            color: var(--sonar-cyan);
+        }
+
+        .telem-empty-hint {
+            margin-top: 8px;
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            text-align: center;
+            overflow-wrap: anywhere;
+        }
+
+        .contact-list-container {
+            max-height: 340px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-right: 4px;
+            min-width: 0;
+        }
+
+        .contact-list-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .contact-list-container::-webkit-scrollbar-track {
+            background: var(--bg-void);
+            border-radius: 4px;
+        }
+        .contact-list-container::-webkit-scrollbar-thumb {
+            background: var(--border-dim);
+            border-radius: 4px;
+        }
+        .contact-list-container::-webkit-scrollbar-thumb:hover {
+            background: var(--phosphor-secondary);
+        }
+
+        .contact-item {
+            min-height: 50px;
+            padding: 8px 10px;
+            background: rgba(6, 17, 11, 0.9);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            min-width: 0;
+            cursor: pointer;
+            transition: all 0.14s ease;
+            touch-action: manipulation;
+        }
+
+        .contact-item * {
+            pointer-events: none;
+        }
+
+        .contact-item:hover {
+            border-color: var(--phosphor-secondary);
+            background: rgba(12, 32, 21, 0.95);
+        }
+
+        .contact-item.selected {
+            background: rgba(0, 255, 102, 0.16);
+            border-color: var(--phosphor-primary);
+            box-shadow: inset 3px 0 0 var(--phosphor-primary);
+        }
+
+        .contact-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .contact-marker {
+            width: 12px;
+            height: 12px;
+            flex-shrink: 0;
+            display: inline-block;
+        }
+
+        .contact-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .contact-id {
+            font-family: var(--font-mono);
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: var(--phosphor-primary);
+            overflow-wrap: anywhere;
+        }
+
+        .contact-type {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            overflow-wrap: anywhere;
+        }
+
+        .contact-right {
+            text-align: right;
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            color: var(--text-main);
+            flex-shrink: 0;
+        }
+
+        .hud-flash-bar {
+            background: rgba(0, 255, 102, 0.1);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-sm);
+            padding: 7px 10px;
+            font-family: var(--font-mono);
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: var(--phosphor-primary);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px 10px;
+            min-width: 0;
+            transition: background 0.18s ease, border-color 0.18s ease;
+        }
+
+        .hud-flash-bar > span:first-child {
+            min-width: 0;
+            flex: 1 1 200px;
+            overflow-wrap: anywhere;
+        }
+
+        .hud-flash-bar > span:last-child {
+            flex-shrink: 0;
+        }
+
+        /* ==========================================================================
+           TOAST & DISCLAIMER FOOTER
+           ========================================================================== */
+        .toast-banner {
+            position: fixed;
+            bottom: 16px;
+            left: 50%;
+            max-width: calc(100vw - 24px);
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-panel-elevated);
+            border: 1px solid var(--phosphor-primary);
+            color: var(--phosphor-primary);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 8px 16px;
+            border-radius: 999px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.9), 0 0 12px var(--phosphor-glow);
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.22s ease, opacity 0.22s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .toast-banner.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .safety-footer {
+            background: rgba(5, 13, 9, 0.9);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .safety-footer strong {
+            color: var(--phosphor-secondary);
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-shell">
+    <!-- TOP COMMAND HEADER -->
+    <header class="top-header">
+        <div class="brand-group">
+            <div class="brand-logo">
+                <span id="statusDot" class="pulse-dot"></span>
+                <span>RADAR LAB</span>
+            </div>
+            <span class="sim-badge">SIMULATION MODE • EDUCATIONAL</span>
+        </div>
+        <div class="sys-clock">
+            <span>SYS: <strong id="sysStateText">ACTIVE</strong></span>
+            <span>TIME: <strong id="utcClock">00:00:00</strong></span>
+        </div>
+    </header>
+
+    <!-- 4 RADAR MODE TABS -->
+    <nav class="mode-bar" aria-label="Radar System Modes">
+        <button type="button" class="mode-btn active" data-mode="naval" id="modeNaval">
+            <span class="mode-en">NAVAL RADAR</span>
+            <span class="mode-th">Surface Vessels</span>
+        </button>
+        <button type="button" class="mode-btn" data-mode="sonar" id="modeSonar">
+            <span class="mode-en">SUBMARINE SONAR</span>
+            <span class="mode-th">Underwater Acoustics</span>
+        </button>
+        <button type="button" class="mode-btn" data-mode="air" id="modeAir">
+            <span class="mode-en">AIR DEFENSE RADAR</span>
+            <span class="mode-th">Airspace Surveillance</span>
+        </button>
+        <button type="button" class="mode-btn" data-mode="space" id="modeSpace">
+            <span class="mode-en">SPACE TRACKING</span>
+            <span class="mode-th">Orbital Telemetry</span>
+        </button>
+    </nav>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="workspace-grid">
+        <!-- LEFT: CIRCULAR RADAR & CONTROLS -->
+        <section class="panel-box radar-section">
+            <div class="panel-header">
+                <span id="radarTitle">SECTOR SCAN: NAVAL SURFACE</span>
+                <span class="sub-tag" id="radarRangeTag">MAX RANGE: 50 NM</span>
+            </div>
+
+            <div class="hud-flash-bar" id="hudFlashBar">
+                <span id="hudCommandMsg">CMD: READY — PRESS + ADD TARGET OR TAP RADAR</span>
+                <span id="hudTargetCounter">TARGETS: 1</span>
+            </div>
+
+            <div class="radar-stage">
+                <div class="radar-wrapper" id="radarWrapper">
+                    <canvas id="radarCanvas"></canvas>
+                </div>
+            </div>
+
+            <div class="radar-hud-overlay">
+                <span>ACTIVE: <strong id="hudActiveCount">1</strong></span>
+                <span>PITCH: <strong id="hudPitch">-- Hz</strong></span>
+                <span>SPEED: <strong id="hudSpeed">1X</strong></span>
+                <span>AUDIO: <strong id="hudAudio">OFF</strong></span>
+            </div>
+
+            <!-- 6 CONTROL BUTTONS -->
+            <div class="controls-grid">
+                <button type="button" class="ctrl-btn btn-active" id="btnPlay">
+                    <span>▶ PLAY</span>
+                    <span class="th-label">Start Simulation</span>
+                </button>
+                <button type="button" class="ctrl-btn btn-warn" id="btnPause">
+                    <span>❚❚ PAUSE</span>
+                    <span class="th-label">Hold Simulation</span>
+                </button>
+                <button type="button" class="ctrl-btn" id="btnReset">
+                    <span>↻ RESET</span>
+                    <span class="th-label">Clear All Targets</span>
+                </button>
+                <button type="button" class="ctrl-btn" id="btnAdd">
+                    <span>＋ ADD TARGET</span>
+                    <span class="th-label">Spawn Single Contact</span>
+                </button>
+                <button type="button" class="ctrl-btn" id="btnSound">
+                    <span>🔇 SOUND: OFF</span>
+                    <span class="th-label">Proximity Audio</span>
+                </button>
+                <button type="button" class="ctrl-btn" id="btnSpeed">
+                    <span>⏩ SPEED: 1X</span>
+                    <span class="th-label">Simulation Rate</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- RIGHT: SELECTED TARGET TELEMETRY & CONTACT LIST -->
+        <aside class="side-column">
+            <section class="panel-box">
+                <div class="panel-header">
+                    <span>TARGET TELEMETRY</span>
+                    <span class="sub-tag">Selected Contact</span>
+                </div>
+
+                <div class="telemetry-grid">
+                    <div class="telem-card">
+                        <span class="telem-label">TARGET ID</span>
+                        <span class="telem-value" id="telId">--</span>
+                    </div>
+                    <div class="telem-card">
+                        <span class="telem-label">TARGET TYPE</span>
+                        <span class="telem-value" id="telType">--</span>
+                    </div>
+                    <div class="telem-card">
+                        <span class="telem-label">SPEED</span>
+                        <span class="telem-value" id="telSpeed">--</span>
+                    </div>
+                    <div class="telem-card">
+                        <span class="telem-label">HEADING</span>
+                        <span class="telem-value" id="telHeading">--</span>
+                    </div>
+                    <div class="telem-card">
+                        <span class="telem-label">RANGE FROM CENTER</span>
+                        <span class="telem-value" id="telRange">--</span>
+                    </div>
+                    <div class="telem-card">
+                        <span class="telem-label">STATUS &amp; PITCH</span>
+                        <span class="telem-value status-highlight" id="telStatus">--</span>
+                    </div>
+                </div>
+                <p class="telem-empty-hint" id="telHint">Press + ADD TARGET or tap the radar display to spawn an inward target.</p>
+            </section>
+
+            <section class="panel-box">
+                <div class="panel-header">
+                    <span>CONTACT LIST</span>
+                    <span class="sub-tag" id="contactCountTag">CONTACTS: 1 / 60</span>
+                </div>
+                <div class="contact-list-container" id="contactList"></div>
+            </section>
+        </aside>
+    </main>
+
+    <!-- EDUCATIONAL SIMULATION DISCLAIMER -->
+    <footer class="safety-footer">
+        <strong>EDUCATIONAL SIMULATION DISCLAIMER:</strong>
+        RADAR LAB is an educational and entertainment simulation application using strictly synthetic targets, coordinates, and kinematics. It does not connect to real sensors, process live radar/sonar feeds, or provide weapon control or targeting systems.
+    </footer>
+</div>
+
+<div class="toast-banner" id="toastBanner">SYSTEM READY</div>
+
+<script>
+/**
+ * ============================================================================
+ * RADAR LAB — INTERACTIVE RADAR & SONAR SIMULATION ENGINE
+ * ============================================================================
+ */
+(function () {
+    'use strict';
+
+    const MAX_TARGETS = 60;
+
+    // Domain definitions for the 4 Radar / Sonar systems
+    const RADAR_MODES = {
+        naval: {
+            title: 'SECTOR SCAN: NAVAL SURFACE',
+            rangeMax: 50,
+            rangeUnit: 'NM',
+            speedUnit: 'knots',
+            accentColor: '#00ff66',
+            prefix: 'NVL',
+            types: [
+                {
+                    name: 'Cargo Vessel',
+                    minSpd: 10,
+                    maxSpd: 22,
+                    color: '#00ff66',
+                    shape: 'square',
+                    statuses: ['Inbound to Center', 'Closing Inward']
+                },
+                {
+                    name: 'Passenger Ferry',
+                    minSpd: 16,
+                    maxSpd: 30,
+                    color: '#38bdf8',
+                    shape: 'circle',
+                    statuses: ['Inbound to Station', 'Closing Range']
+                },
+                {
+                    name: 'Patrol Craft',
+                    minSpd: 22,
+                    maxSpd: 38,
+                    color: '#facc15',
+                    shape: 'triangle',
+                    statuses: ['Converging on Origin', 'Inward Patrol']
+                },
+                {
+                    name: 'Sim Frigate',
+                    minSpd: 20,
+                    maxSpd: 34,
+                    color: '#fb7185',
+                    shape: 'diamond',
+                    statuses: ['Inbound Vector', 'Closing Range']
+                }
+            ]
+        },
+        sonar: {
+            title: 'ACOUSTIC SCAN: SUBMARINE SONAR',
+            rangeMax: 30,
+            rangeUnit: 'KM',
+            speedUnit: 'knots',
+            accentColor: '#00f0ff',
+            prefix: 'SNR',
+            types: [
+                {
+                    name: 'Sim Submarine',
+                    minSpd: 8,
+                    maxSpd: 24,
+                    color: '#00f0ff',
+                    shape: 'diamond',
+                    statuses: ['Submerged Inbound', 'Silent Approach']
+                },
+                {
+                    name: 'Underwater Object',
+                    minSpd: 1,
+                    maxSpd: 7,
+                    color: '#34d399',
+                    shape: 'circle',
+                    statuses: ['Drifting Inward', 'Slow Approach']
+                },
+                {
+                    name: 'Acoustic Echo',
+                    minSpd: 4,
+                    maxSpd: 15,
+                    color: '#fbbf24',
+                    shape: 'wave',
+                    statuses: ['Echo Strengthening', 'Closing Ping']
+                }
+            ]
+        },
+        air: {
+            title: 'AIRSPACE SCAN: AIR DEFENSE RADAR',
+            rangeMax: 240,
+            rangeUnit: 'KM',
+            speedUnit: 'km/h',
+            accentColor: '#00ff66',
+            prefix: 'AIR',
+            types: [
+                {
+                    name: 'Commercial Airliner',
+                    minSpd: 680,
+                    maxSpd: 920,
+                    color: '#38bdf8',
+                    shape: 'triangle',
+                    statuses: ['Inbound Vector', 'Approaching Center']
+                },
+                {
+                    name: 'Sim Aircraft',
+                    minSpd: 450,
+                    maxSpd: 1150,
+                    color: '#00ff66',
+                    shape: 'diamond',
+                    statuses: ['Converging on Origin', 'Closing Inward']
+                },
+                {
+                    name: 'Unknown Aerial',
+                    minSpd: 300,
+                    maxSpd: 1400,
+                    color: '#ff5252',
+                    shape: 'cross',
+                    statuses: ['Unidentified Track', 'Closing Inward']
+                }
+            ]
+        },
+        space: {
+            title: 'ORBITAL SCAN: SPACE TRACKING',
+            rangeMax: 1200,
+            rangeUnit: 'KM',
+            speedUnit: 'km/s',
+            accentColor: '#a3e635',
+            prefix: 'SPC',
+            types: [
+                {
+                    name: 'Sim Satellite',
+                    minSpd: 7.1,
+                    maxSpd: 7.9,
+                    color: '#00ff66',
+                    shape: 'satellite',
+                    statuses: ['Approaching Zenith', 'Closing Pass']
+                },
+                {
+                    name: 'Orbital Object',
+                    minSpd: 6.5,
+                    maxSpd: 8.2,
+                    color: '#38bdf8',
+                    shape: 'diamond',
+                    statuses: ['Track Closing', 'Inbound Pass']
+                },
+                {
+                    name: 'Sim Space Debris',
+                    minSpd: 7.0,
+                    maxSpd: 8.5,
+                    color: '#fb923c',
+                    shape: 'square',
+                    statuses: ['Proximity Watch', 'Converging on Origin']
+                }
+            ]
+        }
+    };
+
+    // Central simulation state
+    const state = {
+        mode: 'naval',
+        isRunning: true,
+        speedMultiplier: 1, // 1, 2, 4
+        soundEnabled: false,
+        targets: [],
+        selectedTargetId: null,
+        pulseRipples: [],
+        idCounter: 100,
+        lastTimestamp: 0,
+        proximityPingTimer: 0,
+        lastPitchHz: 0,
+        canvasSize: 360,
+        dpr: 1
+    };
+
+    let toastTimer = null;
+    let hudFlashTimer = null;
+    let uiSyncAccumulator = 0;
+
+    // ========================================================================
+    // WEB AUDIO API SYNTHESIZER (USER-INITIATED ONLY, NO AUTOPLAY)
+    // ========================================================================
+    const audioFX = {
+        ctx: null,
+
+        ensureContext() {
+            try {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) return null;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume().catch(() => {});
+                }
+                return this.ctx;
+            } catch (_err) {
+                return null;
+            }
+        },
+
+        playUiClick(freq = 680) {
+            if (!state.soundEnabled) return;
+            const ctx = this.ensureContext();
+            if (!ctx) return;
+            try {
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now);
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.exponentialRampToValueAtTime(0.06, now + 0.012);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.095);
+            } catch (_err) {
+                // Ignore audio errors on restricted devices
+            }
+        },
+
+        playProximityPing(hz, modeKey, isArrival) {
+            if (!state.soundEnabled) return;
+            const ctx = this.ensureContext();
+            if (!ctx) return;
+            try {
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                if (modeKey === 'air') {
+                    osc.type = 'triangle';
+                } else {
+                    osc.type = 'sine';
+                }
+
+                const safeHz = Math.max(120, Math.min(2200, hz));
+                osc.frequency.setValueAtTime(safeHz, now);
+                if (isArrival) {
+                    osc.frequency.exponentialRampToValueAtTime(safeHz * 1.22, now + 0.14);
+                }
+
+                const duration = isArrival ? 0.24 : 0.14;
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.exponentialRampToValueAtTime(isArrival ? 0.12 : 0.085, now + 0.015);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + duration + 0.01);
+            } catch (_err) {
+                // Ignore audio errors
+            }
+        }
+    };
+
+    // ========================================================================
+    // PROXIMITY FREQUENCY MAPPING: LOW AT OUTER EDGE -> HIGH AT RING 3 (75%)
+    // ========================================================================
+    function computeProximityFrequency(normDist) {
+        // normDist: 1.00 = outer edge (Ring 4), 0.75 = Ring 3, 0.00 = center
+        const d = Math.max(0, Math.min(1, normDist));
+        if (d >= 0.75) {
+            // Escalate from ~160 Hz at outer edge (1.0) to ~1020 Hz at Ring 3 (0.75)
+            const t = (1.0 - d) / 0.25;
+            return Math.round(160 + (1020 - 160) * Math.pow(t, 0.72));
+        }
+        // Climb further from ~1020 Hz at Ring 3 (0.75) up to ~1450 Hz at center (0.0)
+        const t = (0.75 - d) / 0.75;
+        return Math.round(1020 + (1450 - 1020) * Math.pow(t, 0.85));
+    }
+
+    // ========================================================================
+    // TARGET SPAWNING & SLOW INWARD MOVEMENT LOGIC
+    // ========================================================================
+    function normalizeAngle(rad) {
+        const twoPi = Math.PI * 2;
+        return ((rad % twoPi) + twoPi) % twoPi;
+    }
+
+    function createTarget(modeKey, customX, customY) {
+        const cfg = RADAR_MODES[modeKey] || RADAR_MODES.naval;
+        const typeObj = cfg.types[Math.floor(Math.random() * cfg.types.length)];
+        state.idCounter += 1;
+
+        let x;
+        let y;
+        if (typeof customX === 'number' && typeof customY === 'number') {
+            x = customX;
+            y = customY;
+        } else {
+            // Spawn near outer perimeter (radius ~0.88 to 0.96)
+            const angle = Math.random() * Math.PI * 2;
+            const spawnR = 0.88 + Math.random() * 0.08;
+            x = Math.cos(angle) * spawnR;
+            y = Math.sin(angle) * spawnR;
+        }
+
+        const displaySpeed = Number(
+            (typeObj.minSpd + Math.random() * (typeObj.maxSpd - typeObj.minSpd)).toFixed(
+                modeKey === 'space' ? 1 : 0
+            )
+        );
+
+        // Slow inward velocity (normalized radius units per second at 1X)
+        const normSpeed = 0.024 + Math.random() * 0.028;
+        const headingRad = normalizeAngle(Math.atan2(-x, y));
+        const status = typeObj.statuses[Math.floor(Math.random() * typeObj.statuses.length)];
+
+        return {
+            id: `${cfg.prefix}-${state.idCounter}`,
+            mode: modeKey,
+            typeName: typeObj.name,
+            color: typeObj.color,
+            shape: typeObj.shape,
+            x,
+            y,
+            headingRad,
+            normSpeed,
+            displaySpeed,
+            speedUnit: cfg.speedUnit,
+            rangeMax: cfg.rangeMax,
+            rangeUnit: cfg.rangeUnit,
+            status,
+            arrived: false,
+            trail: []
+        };
+    }
+
+    function spawnOneTarget(customX, customY) {
+        if (state.targets.length >= MAX_TARGETS) {
+            showToast(`MAXIMUM ${MAX_TARGETS} TARGETS REACHED`);
+            setHudFeedback('CMD: MAX TARGET CAPACITY REACHED');
+            return null;
+        }
+
+        const target = createTarget(state.mode, customX, customY);
+        state.targets.push(target);
+        state.selectedTargetId = target.id;
+        spawnRadarRipple(target.x, target.y, target.color);
+
+        const dist = Math.hypot(target.x, target.y);
+        const hz = computeProximityFrequency(Math.min(1, dist));
+        state.lastPitchHz = hz;
+        audioFX.playProximityPing(hz, state.mode, false);
+
+        syncAllUI();
+        renderRadar();
+        setHudFeedback(`CMD: SPAWNED ${target.id} (${hz} Hz)`);
+        showToast(`SPAWNED ${target.id}`);
+        return target;
+    }
+
+    function clearAllTargets() {
+        state.targets = [];
+        state.selectedTargetId = null;
+        state.pulseRipples = [];
+        state.lastPitchHz = 0;
+        state.proximityPingTimer = 0;
+        syncAllUI();
+        renderRadar();
+        setHudFeedback('CMD: RESET — ALL TARGETS CLEARED (0)');
+    }
+
+    function spawnRadarRipple(x, y, color) {
+        state.pulseRipples.push({
+            x,
+            y,
+            radius: 0.03,
+            alpha: 0.85,
+            color: color || '#00ff66'
+        });
+        if (state.pulseRipples.length > 24) {
+            state.pulseRipples.shift();
+        }
+    }
+
+    function updateSimulation(dt) {
+        // Animate expanding echo ripples
+        for (let r = state.pulseRipples.length - 1; r >= 0; r--) {
+            const rip = state.pulseRipples[r];
+            rip.radius += dt * 0.85;
+            rip.alpha -= dt * 1.05;
+            if (rip.alpha <= 0 || rip.radius > 1.05) {
+                state.pulseRipples.splice(r, 1);
+            }
+        }
+
+        if (!state.isRunning) return;
+
+        const effectiveDt = dt * state.speedMultiplier;
+
+        for (let i = 0; i < state.targets.length; i++) {
+            const t = state.targets[i];
+
+            if (!t.arrived) {
+                if (Math.random() < 0.24) {
+                    t.trail.push({ x: t.x, y: t.y });
+                    if (t.trail.length > 10) t.trail.shift();
+                }
+
+                // Steer straight toward center origin (0, 0)
+                t.headingRad = normalizeAngle(Math.atan2(-t.x, t.y));
+                const vx = Math.sin(t.headingRad) * t.normSpeed;
+                const vy = -Math.cos(t.headingRad) * t.normSpeed;
+
+                t.x += vx * effectiveDt;
+                t.y += vy * effectiveDt;
+
+                if (Math.hypot(t.x, t.y) <= 0.022) {
+                    t.x = 0;
+                    t.y = 0;
+                    t.arrived = true;
+                    t.status = 'Reached Center';
+                    spawnRadarRipple(0, 0, t.color);
+                    audioFX.playProximityPing(1450, state.mode, true);
+                    showToast(`${t.id} REACHED CENTER`);
+                }
+            }
+        }
+
+        // Proximity audio pitch based on selected target or nearest active target
+        let refTarget = state.targets.find(t => t.id === state.selectedTargetId && !t.arrived);
+        if (!refTarget) {
+            const movingTargets = state.targets.filter(t => !t.arrived);
+            if (movingTargets.length > 0) {
+                refTarget = movingTargets.reduce((best, curr) => {
+                    return Math.hypot(curr.x, curr.y) < Math.hypot(best.x, best.y) ? curr : best;
+                }, movingTargets[0]);
+            }
+        }
+
+        if (refTarget) {
+            const refNormDist = Math.min(1, Math.hypot(refTarget.x, refTarget.y));
+            const currentHz = computeProximityFrequency(refNormDist);
+            state.lastPitchHz = currentHz;
+
+            const pingInterval = (0.30 + Math.pow(refNormDist, 1.35) * 0.85) / Math.sqrt(state.speedMultiplier);
+            state.proximityPingTimer += dt;
+
+            if (state.proximityPingTimer >= pingInterval) {
+                state.proximityPingTimer = 0;
+                audioFX.playProximityPing(currentHz, state.mode, false);
+                spawnRadarRipple(refTarget.x, refTarget.y, refTarget.color);
+            }
+        } else {
+            const sel = state.targets.find(t => t.id === state.selectedTargetId);
+            state.lastPitchHz = sel ? 1450 : 0;
+            state.proximityPingTimer = 0;
+        }
+    }
+
+    // ========================================================================
+    // RESPONSIVE CANVAS RESIZING & RENDERING (NO ROTATING SWEEP NEEDLE)
+    // ========================================================================
+    function resizeCanvas() {
+        const wrapper = document.getElementById('radarWrapper');
+        const canvas = document.getElementById('radarCanvas');
+        if (!wrapper || !canvas) return;
+
+        const rect = wrapper.getBoundingClientRect();
+        const size = Math.max(220, Math.floor(Math.min(rect.width, rect.height) || 320));
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        state.canvasSize = size;
+        state.dpr = dpr;
+
+        canvas.width = Math.floor(size * dpr);
+        canvas.height = Math.floor(size * dpr);
+
+        renderRadar();
+    }
+
+    function renderRadar() {
+        const canvas = document.getElementById('radarCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const size = state.canvasSize;
+        const dpr = state.dpr;
+        const cfg = RADAR_MODES[state.mode] || RADAR_MODES.naval;
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, size, size);
+
+        const cx = size / 2;
+        const cy = size / 2;
+        // Leave comfortable margin inside the square canvas so N / E / S / W labels never clip
+        const radius = size * 0.425;
+
+        // 1. Radar disc background
+        const bgGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, radius);
+        bgGrad.addColorStop(0, 'rgba(0, 255, 102, 0.08)');
+        bgGrad.addColorStop(0.75, 'rgba(0, 80, 35, 0.04)');
+        bgGrad.addColorStop(1, 'rgba(0, 20, 10, 0.22)');
+        ctx.fillStyle = bgGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. All 4 concentric range rings (25%, 50%, 75% RING 3, 100% outer perimeter)
+        const ringCount = 4;
+        ctx.font = `600 ${Math.max(10, Math.round(size * 0.022))}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+
+        for (let i = 1; i <= ringCount; i++) {
+            const r = (radius / ringCount) * i;
+            if (i === ringCount) {
+                ctx.strokeStyle = cfg.accentColor;
+                ctx.lineWidth = 1.6;
+            } else if (i === 3) {
+                ctx.strokeStyle = 'rgba(255, 185, 50, 0.72)';
+                ctx.lineWidth = 1.5;
+            } else {
+                ctx.strokeStyle = 'rgba(0, 255, 102, 0.28)';
+                ctx.lineWidth = 1;
+            }
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const distVal = Math.round((cfg.rangeMax / ringCount) * i);
+            if (i === 3) {
+                ctx.fillStyle = 'rgba(255, 205, 90, 0.95)';
+                ctx.fillText(`RING 3 • ${distVal}${cfg.rangeUnit}`, cx + 5, cy - r + 14);
+            } else {
+                ctx.fillStyle = 'rgba(155, 238, 186, 0.78)';
+                ctx.fillText(`${distVal}${cfg.rangeUnit}`, cx + 5, cy - r + 14);
+            }
+        }
+
+        // 3. Crosshair lines (N-S, E-W, and diagonal axes)
+        ctx.strokeStyle = 'rgba(0, 255, 102, 0.24)';
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - radius);
+        ctx.lineTo(cx, cy + radius);
+        ctx.moveTo(cx - radius, cy);
+        ctx.lineTo(cx + radius, cy);
+        ctx.stroke();
+
+        ctx.save();
+        ctx.setLineDash([4, 6]);
+        ctx.strokeStyle = 'rgba(0, 255, 102, 0.12)';
+        const diag = radius * Math.SQRT1_2;
+        ctx.beginPath();
+        ctx.moveTo(cx - diag, cy - diag);
+        ctx.lineTo(cx + diag, cy + diag);
+        ctx.moveTo(cx + diag, cy - diag);
+        ctx.lineTo(cx - diag, cy + diag);
+        ctx.stroke();
+        ctx.restore();
+
+        // 4. Cardinal direction labels N / E / S / W inside safe canvas bounds
+        const labelOffset = Math.min(radius + Math.max(10, size * 0.024), size / 2 - 11);
+        ctx.font = `700 ${Math.max(11, Math.round(size * 0.026))}px monospace`;
+        ctx.fillStyle = cfg.accentColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('N', cx, cy - labelOffset);
+        ctx.fillText('E', cx + labelOffset, cy);
+        ctx.fillText('S', cx, cy + labelOffset);
+        ctx.fillText('W', cx - labelOffset, cy);
+
+        // 5. Render targets, dashed trajectory lines to center, trails, and highlight rings
+        for (let i = 0; i < state.targets.length; i++) {
+            const t = state.targets[i];
+            const px = cx + t.x * radius;
+            const py = cy + t.y * radius;
+            const isSelected = t.id === state.selectedTargetId;
+
+            if (!t.arrived) {
+                ctx.save();
+                ctx.setLineDash([3, 4]);
+                ctx.strokeStyle = hexToRgba(t.color, isSelected ? 0.58 : 0.26);
+                ctx.lineWidth = isSelected ? 1.4 : 0.9;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(cx, cy);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            for (let j = 0; j < t.trail.length; j++) {
+                const pt = t.trail[j];
+                const tx = cx + pt.x * radius;
+                const ty = cy + pt.y * radius;
+                const alpha = ((j + 1) / t.trail.length) * 0.35;
+                ctx.fillStyle = hexToRgba(t.color, alpha);
+                ctx.beginPath();
+                ctx.arc(tx, ty, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            if (!t.arrived) {
+                const vecLen = isSelected ? 18 : 12;
+                const vx = px + Math.sin(t.headingRad) * vecLen;
+                const vy = py - Math.cos(t.headingRad) * vecLen;
+                ctx.strokeStyle = hexToRgba(t.color, isSelected ? 0.95 : 0.72);
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(vx, vy);
+                ctx.stroke();
+            }
+
+            drawTargetSymbol(ctx, px, py, t.shape, t.color, isSelected ? 7.5 : 5.8);
+
+            if (isSelected) {
+                const pulse = 13 + Math.sin(performance.now() * 0.008) * 2.5;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.arc(px, py, pulse, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.strokeStyle = cfg.accentColor;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.arc(px, py, pulse + 4, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.font = `700 ${Math.max(10, Math.round(size * 0.022))}px monospace`;
+            ctx.fillStyle = isSelected ? '#ffffff' : hexToRgba(t.color, 0.92);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(t.id, px + 10, py - 8);
+        }
+
+        // 6. Expanding proximity echo ripples
+        for (let r = 0; r < state.pulseRipples.length; r++) {
+            const rip = state.pulseRipples[r];
+            const rx = cx + rip.x * radius;
+            const ry = cy + rip.y * radius;
+            const rr = rip.radius * radius;
+            ctx.strokeStyle = hexToRgba(rip.color, Math.max(0, rip.alpha));
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // 7. Glowing center origin dot & ring at (0,0)
+        ctx.save();
+        ctx.shadowColor = cfg.accentColor;
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = cfg.accentColor;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = cfg.accentColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
+    }
+
+    function drawTargetSymbol(ctx, x, y, shape, color, r) {
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6;
+
+        switch (shape) {
+            case 'square':
+                ctx.fillRect(x - r * 0.85, y - r * 0.85, r * 1.7, r * 1.7);
+                break;
+            case 'triangle':
+                ctx.beginPath();
+                ctx.moveTo(x, y - r * 1.15);
+                ctx.lineTo(x + r, y + r * 0.9);
+                ctx.lineTo(x - r, y + r * 0.9);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            case 'diamond':
+                ctx.beginPath();
+                ctx.moveTo(x, y - r * 1.15);
+                ctx.lineTo(x + r * 1.05, y);
+                ctx.lineTo(x, y + r * 1.15);
+                ctx.lineTo(x - r * 1.05, y);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            case 'cross':
+                ctx.beginPath();
+                ctx.moveTo(x - r, y - r);
+                ctx.lineTo(x + r, y + r);
+                ctx.moveTo(x + r, y - r);
+                ctx.lineTo(x - r, y + r);
+                ctx.stroke();
+                break;
+            case 'wave':
+                ctx.beginPath();
+                ctx.arc(x, y, r * 0.95, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            case 'satellite':
+                ctx.fillRect(x - r * 0.55, y - r * 0.55, r * 1.1, r * 1.1);
+                ctx.beginPath();
+                ctx.moveTo(x - r * 1.4, y);
+                ctx.lineTo(x + r * 1.4, y);
+                ctx.stroke();
+                break;
+            case 'circle':
+            default:
+                ctx.beginPath();
+                ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+        }
+        ctx.restore();
+    }
+
+    function hexToRgba(hex, alpha) {
+        const clean = hex.replace('#', '');
+        const num = parseInt(clean, 16);
+        const r = (num >> 16) & 255;
+        const g = (num >> 8) & 255;
+        const b = num & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    // ========================================================================
+    // CANVAS TAP / CLICK SELECTION (36PX RADIUS) OR SPAWN
+    // ========================================================================
+    function handleCanvasTap(clientX, clientY) {
+        const canvas = document.getElementById('radarCanvas');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const size = state.canvasSize || rect.width;
+        const cx = size / 2;
+        const cy = size / 2;
+        const radius = size * 0.425;
+
+        const tapX = clientX - rect.left;
+        const tapY = clientY - rect.top;
+
+        // 1. Check if user tapped an existing target within a generous 36px touch radius
+        let closestTarget = null;
+        let closestDist = 36;
+
+        for (let i = 0; i < state.targets.length; i++) {
+            const t = state.targets[i];
+            const tx = cx + t.x * radius;
+            const ty = cy + t.y * radius;
+            const d = Math.hypot(tapX - tx, tapY - ty);
+            if (d <= closestDist) {
+                closestDist = d;
+                closestTarget = t;
+            }
+        }
+
+        if (closestTarget) {
+            selectTargetById(closestTarget.id, true);
+            return;
+        }
+
+        // 2. Otherwise spawn a new target at the tapped spot inside the radar perimeter
+        const normX = (tapX - cx) / radius;
+        const normY = (tapY - cy) / radius;
+        const normR = Math.hypot(normX, normY);
+
+        if (normR <= 1.04) {
+            const clampedR = Math.min(0.96, Math.max(0.10, normR));
+            const ang = Math.atan2(normY, normX);
+            spawnOneTarget(Math.cos(ang) * clampedR, Math.sin(ang) * clampedR);
+        }
+    }
+
+    function selectTargetById(id, playPing) {
+        const target = state.targets.find(t => t.id === id);
+        if (!target) return;
+        state.selectedTargetId = target.id;
+        spawnRadarRipple(target.x, target.y, target.color);
+
+        const normDist = Math.min(1, Math.hypot(target.x, target.y));
+        const hz = computeProximityFrequency(normDist);
+        state.lastPitchHz = hz;
+
+        if (playPing) {
+            audioFX.playProximityPing(hz, state.mode, false);
+        }
+
+        syncAllUI();
+        renderRadar();
+        setHudFeedback(`CMD: SELECTED ${target.id} (${hz} Hz)`);
+        showToast(`SELECTED ${target.id}`);
+    }
+
+    // ========================================================================
+    // UI SYNCHRONIZATION: TELEMETRY, CONTACT LIST, CONTROLS & CLOCK
+    // ========================================================================
+    function syncAllUI() {
+        syncControlButtons();
+        syncTelemetryPanel();
+        renderContactList();
+    }
+
+    function syncControlButtons() {
+        const btnPlay = document.getElementById('btnPlay');
+        const btnPause = document.getElementById('btnPause');
+        const btnSound = document.getElementById('btnSound');
+        const btnSpeed = document.getElementById('btnSpeed');
+        const statusDot = document.getElementById('statusDot');
+        const sysStateText = document.getElementById('sysStateText');
+        const hudSpeed = document.getElementById('hudSpeed');
+        const hudAudio = document.getElementById('hudAudio');
+        const hudTargetCounter = document.getElementById('hudTargetCounter');
+        const hudActiveCount = document.getElementById('hudActiveCount');
+        const hudPitch = document.getElementById('hudPitch');
+
+        if (btnPlay && btnPause) {
+            btnPlay.classList.toggle('btn-active', state.isRunning);
+            btnPause.classList.toggle('btn-active', !state.isRunning);
+        }
+
+        if (statusDot) statusDot.classList.toggle('paused', !state.isRunning);
+        if (sysStateText) sysStateText.textContent = state.isRunning ? 'ACTIVE' : 'PAUSED';
+
+        if (btnSound) {
+            btnSound.classList.toggle('btn-active', state.soundEnabled);
+            btnSound.innerHTML = state.soundEnabled
+                ? '<span>🔊 SOUND: ON</span><span class="th-label">Proximity Audio</span>'
+                : '<span>🔇 SOUND: OFF</span><span class="th-label">Proximity Audio</span>';
+        }
+
+        if (btnSpeed) {
+            btnSpeed.innerHTML = `<span>⏩ SPEED: ${state.speedMultiplier}X</span><span class="th-label">Simulation Rate</span>`;
+        }
+
+        const movingCount = state.targets.filter(t => !t.arrived).length;
+        if (hudTargetCounter) hudTargetCounter.textContent = `TARGETS: ${state.targets.length}`;
+        if (hudActiveCount) hudActiveCount.textContent = `${movingCount}`;
+        if (hudSpeed) hudSpeed.textContent = `${state.speedMultiplier}X`;
+        if (hudAudio) hudAudio.textContent = state.soundEnabled ? 'ON' : 'OFF';
+        if (hudPitch) {
+            hudPitch.textContent = state.lastPitchHz > 0 ? `${state.lastPitchHz} Hz` : '-- Hz';
+        }
+    }
+
+    function syncTelemetryPanel() {
+        const telId = document.getElementById('telId');
+        const telType = document.getElementById('telType');
+        const telSpeed = document.getElementById('telSpeed');
+        const telHeading = document.getElementById('telHeading');
+        const telRange = document.getElementById('telRange');
+        const telStatus = document.getElementById('telStatus');
+        const telHint = document.getElementById('telHint');
+
+        const target = state.targets.find(t => t.id === state.selectedTargetId);
+        if (!target) {
+            if (telId) telId.textContent = '--';
+            if (telType) telType.textContent = '--';
+            if (telSpeed) telSpeed.textContent = '--';
+            if (telHeading) telHeading.textContent = '--';
+            if (telRange) telRange.textContent = '--';
+            if (telStatus) telStatus.textContent = '--';
+            if (telHint) {
+                telHint.textContent = state.targets.length === 0
+                    ? 'Press + ADD TARGET or tap the radar display to spawn an inward target.'
+                    : 'Tap a target on the radar or pick an entry in CONTACT LIST to inspect telemetry.';
+            }
+            return;
+        }
+
+        const distRatio = Math.min(1, Math.hypot(target.x, target.y));
+        const actualRange = (distRatio * target.rangeMax).toFixed(1);
+        const headingDeg = Math.round((target.headingRad * 180) / Math.PI) % 360;
+        const pitchHz = computeProximityFrequency(distRatio);
+
+        if (telId) telId.textContent = target.id;
+        if (telType) telType.textContent = target.typeName;
+        if (telSpeed) telSpeed.textContent = `${target.displaySpeed} ${target.speedUnit}`;
+        if (telHeading) {
+            telHeading.textContent = target.arrived
+                ? 'CENTER'
+                : `${String(headingDeg).padStart(3, '0')}° → CENTER`;
+        }
+        if (telRange) telRange.textContent = `${actualRange} ${target.rangeUnit}`;
+        if (telStatus) {
+            telStatus.textContent = `${pitchHz} Hz • ${target.arrived ? 'At Center' : 'Closing In'}`;
+        }
+        if (telHint) telHint.textContent = target.status;
+    }
+
+    function renderContactList() {
+        const listEl = document.getElementById('contactList');
+        const countTag = document.getElementById('contactCountTag');
+        if (!listEl) return;
+
+        if (countTag) {
+            countTag.textContent = `CONTACTS: ${state.targets.length} / ${MAX_TARGETS}`;
+        }
+
+        if (state.targets.length === 0) {
+            listEl.innerHTML = '<div class="telem-empty-hint">No targets active. Press + ADD TARGET to spawn one.</div>';
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        for (let i = state.targets.length - 1; i >= 0; i--) {
+            const t = state.targets[i];
+            const row = document.createElement('div');
+            row.className = `contact-item${t.id === state.selectedTargetId ? ' selected' : ''}`;
+            row.dataset.targetId = t.id;
+
+            const distRatio = Math.min(1, Math.hypot(t.x, t.y));
+            const rng = (distRatio * t.rangeMax).toFixed(1);
+            const hz = computeProximityFrequency(distRatio);
+
+            row.innerHTML = `
+                <div class="contact-left">
+                    <span class="contact-marker" style="background:${t.color}; border-radius:${t.shape === 'circle' ? '50%' : '2px'};"></span>
+                    <div class="contact-info">
+                        <span class="contact-id">${t.id}</span>
+                        <span class="contact-type">${t.typeName}</span>
+                    </div>
+                </div>
+                <div class="contact-right">
+                    <div>${rng} ${t.rangeUnit}</div>
+                    <div>${hz} Hz</div>
+                </div>
+            `;
+            frag.appendChild(row);
+        }
+
+        listEl.innerHTML = '';
+        listEl.appendChild(frag);
+    }
+
+    // ========================================================================
+    // COMMAND ACTIONS & MODE SWITCHING
+    // ========================================================================
+    function switchRadarMode(newMode) {
+        if (!newMode || !RADAR_MODES[newMode]) return;
+        state.mode = newMode;
+        const cfg = RADAR_MODES[newMode];
+
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === newMode);
+        });
+
+        const titleEl = document.getElementById('radarTitle');
+        const rangeTagEl = document.getElementById('radarRangeTag');
+        if (titleEl) titleEl.textContent = cfg.title;
+        if (rangeTagEl) rangeTagEl.textContent = `MAX RANGE: ${cfg.rangeMax} ${cfg.rangeUnit}`;
+
+        // Create fresh target for the selected radar mode
+        state.targets = [];
+        state.selectedTargetId = null;
+        state.pulseRipples = [];
+        state.proximityPingTimer = 0;
+
+        const initialTarget = createTarget(newMode);
+        state.targets.push(initialTarget);
+        state.selectedTargetId = initialTarget.id;
+
+        audioFX.playUiClick(740);
+        syncAllUI();
+        renderRadar();
+        setHudFeedback(`CMD: MODE -> ${cfg.title}`);
+        showToast(`MODE: ${cfg.title}`);
+    }
+
+    function executeControlAction(actionId) {
+        switch (actionId) {
+            case 'btnPlay':
+                state.isRunning = true;
+                audioFX.ensureContext();
+                audioFX.playUiClick(780);
+                syncAllUI();
+                renderRadar();
+                setHudFeedback('CMD: SIMULATION PLAYING');
+                showToast('SIMULATION PLAYING');
+                break;
+
+            case 'btnPause':
+                state.isRunning = false;
+                audioFX.playUiClick(520);
+                syncAllUI();
+                renderRadar();
+                setHudFeedback('CMD: SIMULATION PAUSED');
+                showToast('SIMULATION PAUSED');
+                break;
+
+            case 'btnReset':
+                audioFX.playUiClick(440);
+                clearAllTargets();
+                showToast('ALL TARGETS CLEARED');
+                break;
+
+            case 'btnAdd':
+                audioFX.ensureContext();
+                spawnOneTarget();
+                break;
+
+            case 'btnSound':
+                state.soundEnabled = !state.soundEnabled;
+                if (state.soundEnabled) {
+                    audioFX.ensureContext();
+                    const previewHz = state.lastPitchHz > 0 ? state.lastPitchHz : 440;
+                    audioFX.playProximityPing(previewHz, state.mode, false);
+                }
+                syncAllUI();
+                setHudFeedback(`CMD: SOUND ${state.soundEnabled ? 'ENABLED' : 'MUTED'}`);
+                showToast(state.soundEnabled ? 'PROXIMITY SOUND: ON' : 'PROXIMITY SOUND: OFF');
+                break;
+
+            case 'btnSpeed': {
+                const speeds = [1, 2, 4];
+                const idx = speeds.indexOf(state.speedMultiplier);
+                state.speedMultiplier = speeds[(idx + 1) % speeds.length];
+                audioFX.playUiClick(620 + state.speedMultiplier * 90);
+                syncAllUI();
+                setHudFeedback(`CMD: SPEED SET TO ${state.speedMultiplier}X`);
+                showToast(`SIMULATION SPEED: ${state.speedMultiplier}X`);
+                break;
+            }
+        }
+    }
+
+    function setHudFeedback(msg) {
+        const msgEl = document.getElementById('hudCommandMsg');
+        const barEl = document.getElementById('hudFlashBar');
+        if (msgEl) msgEl.textContent = msg;
+        if (barEl) {
+            barEl.classList.add('flash-active');
+            clearTimeout(hudFlashTimer);
+            hudFlashTimer = setTimeout(() => {
+                barEl.classList.remove('flash-active');
+            }, 420);
+        }
+    }
+
+    function showToast(message) {
+        const toast = document.getElementById('toastBanner');
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 1600);
+    }
+
+    function updateClock() {
+        const clockEl = document.getElementById('utcClock');
+        if (!clockEl) return;
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        clockEl.textContent = `${hh}:${mm}:${ss}`;
+    }
+
+    // ========================================================================
+    // MAIN REQUESTANIMATIONFRAME LOOP
+    // ========================================================================
+    function loop(timestamp) {
+        if (!state.lastTimestamp) state.lastTimestamp = timestamp;
+        const rawDt = (timestamp - state.lastTimestamp) / 1000;
+        state.lastTimestamp = timestamp;
+        const dt = Math.min(rawDt, 0.1);
+
+        updateSimulation(dt);
+        renderRadar();
+
+        uiSyncAccumulator += dt;
+        if (uiSyncAccumulator >= 0.2) {
+            uiSyncAccumulator = 0;
+            syncControlButtons();
+            syncTelemetryPanel();
+        }
+
+        window.requestAnimationFrame(loop);
+    }
+
+    // ========================================================================
+    // EVENT BINDING (TOUCH + MOUSE SAFE, ZERO DOUBLE-TRIGGER)
+    // ========================================================================
+    function bindEvents() {
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                switchRadarMode(btn.dataset.mode);
+            });
+        });
+
+        ['btnPlay', 'btnPause', 'btnReset', 'btnAdd', 'btnSound', 'btnSpeed'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    executeControlAction(id);
+                });
+            }
+        });
+
+        const contactList = document.getElementById('contactList');
+        if (contactList) {
+            contactList.addEventListener('click', (e) => {
+                const row = e.target.closest('.contact-item');
+                if (row && row.dataset.targetId) {
+                    audioFX.ensureContext();
+                    selectTargetById(row.dataset.targetId, true);
+                }
+            });
+        }
+
+        const canvas = document.getElementById('radarCanvas');
+        if (canvas) {
+            let touchHandled = false;
+
+            canvas.addEventListener('touchend', (e) => {
+                if (e.changedTouches && e.changedTouches.length > 0) {
+                    touchHandled = true;
+                    const touch = e.changedTouches[0];
+                    audioFX.ensureContext();
+                    handleCanvasTap(touch.clientX, touch.clientY);
+                    setTimeout(() => {
+                        touchHandled = false;
+                    }, 350);
+                }
+            }, { passive: true });
+
+            canvas.addEventListener('click', (e) => {
+                if (touchHandled) return;
+                audioFX.ensureContext();
+                handleCanvasTap(e.clientX, e.clientY);
+            });
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+    }
+
+    function init() {
+        resizeCanvas();
+        bindEvents();
+
+        // Start with 1 sample target already active so movement & controls are immediately visible
+        const firstTarget = createTarget(state.mode);
+        state.targets.push(firstTarget);
+        state.selectedTargetId = firstTarget.id;
+
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        syncAllUI();
+        renderRadar();
+        window.requestAnimationFrame(loop);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+</body>
+</html>
